@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>人脸检测 Demo（图片 &amp; 摄像头）</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Bootstrap 5 -->
+    <link
+      href="https://unpkg.com/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <!-- face-api.js -->
+    <script
+      defer
+      src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"
+    ></script>
+
+    <!-- 主逻辑 -->
+    <script defer src="main.js"></script>
+
+    <style>
+      /* 浅色、高可读：参考常见评估/政务类官网（白底、细边框、蓝主色） */
+      :root {
+        --tone-bg: #f0f4f8;
+        --tone-surface: #ffffff;
+        --tone-text: #1b1b1b;
+        --tone-muted: #5c636a;
+        --tone-border: #dfe1e2;
+        --tone-primary: #005ea2;
+        --tone-primary-hover: #004578;
+        --tone-primary-soft: #e7f2fa;
+        --tone-nav-bg: #ffffff;
+        --tone-nav-shadow: rgba(15, 23, 42, 0.06);
+        --tone-preview-bg: #ffffff;
+      }
+
+      body {
+        background: var(--tone-bg);
+        color: var(--tone-text);
+        min-height: 100vh;
+      }
+
+      .navbar.eval-nav {
+        background: var(--tone-nav-bg);
+        border-bottom: 1px solid var(--tone-border);
+        box-shadow: 0 1px 3px var(--tone-nav-shadow);
+      }
+
+      .navbar .hero-title {
+        color: var(--tone-text);
+      }
+
+      .hero-title {
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--tone-text);
+      }
+
+      .hero-subtitle {
+        color: var(--tone-muted);
+      }
+
+      .card {
+        background-color: var(--tone-surface);
+        border: 1px solid var(--tone-border);
+        box-shadow: 0 1px 3px var(--tone-nav-shadow);
+      }
+
+      .nav-pills .nav-link {
+        color: var(--tone-muted);
+        border-radius: 0.5rem;
+        border: 1px solid transparent;
+      }
+
+      .nav-pills .nav-link:hover {
+        color: var(--tone-text);
+        background: var(--tone-primary-soft);
+      }
+
+      .nav-pills .nav-link.active {
+        color: #fff;
+        background: var(--tone-primary);
+        border-color: var(--tone-primary);
+      }
+
+      #preview-container,
+      #video-container {
+        position: relative;
+        max-width: 100%;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        background: var(--tone-preview-bg);
+        min-height: 280px;
+        border: 1px solid var(--tone-border);
+      }
+
+      /* 视频与覆盖层同一层做镜像，避免前置摄像头“人眼方向”与框错位 */
+      #video-container .video-stack {
+        position: relative;
+        display: block;
+        max-width: 100%;
+        width: fit-content;
+        margin: 0 auto;
+      }
+
+      #video-container.mirror-selfie .video-stack {
+        transform: scaleX(-1);
+        transform-origin: center center;
+      }
+
+      #preview-image,
+      #video {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        position: relative;
+        z-index: 0;
+      }
+
+      #preview-placeholder {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: grid;
+        place-items: center;
+        padding: 1rem;
+        color: var(--tone-muted);
+        background: #ffffff;
+        text-align: center;
+        pointer-events: none;
+      }
+
+      #overlay-canvas,
+      #video-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      .badge-soft {
+        background: var(--tone-primary-soft);
+        border: 1px solid var(--tone-border);
+        color: var(--tone-muted);
+      }
+
+      .face-item {
+        border-radius: 0.5rem;
+        background: #f8fafc;
+        border: 1px solid var(--tone-border);
+      }
+
+      .face-item small {
+        color: var(--tone-muted);
+      }
+
+      .status-pill {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.6rem;
+        border-radius: 999px;
+        background: #f8fafc;
+        border: 1px solid var(--tone-border);
+        color: var(--tone-muted);
+      }
+
+      .status-pill.success {
+        background: #e7f4ea;
+        border-color: #b4d6b8;
+        color: #1e4620;
+      }
+
+      .status-pill.error {
+        background: #fdeaea;
+        border-color: #f0b4b4;
+        color: #6b1c1c;
+      }
+
+      .hero-chip {
+        font-size: 0.75rem;
+        padding: 0.15rem 0.65rem;
+        border-radius: 999px;
+        background: var(--tone-primary-soft);
+        border: 1px solid rgba(0, 94, 162, 0.22);
+        color: var(--tone-primary);
+      }
+
+      .btn-primary {
+        --bs-btn-bg: var(--tone-primary);
+        --bs-btn-border-color: var(--tone-primary);
+        --bs-btn-hover-bg: var(--tone-primary-hover);
+        --bs-btn-hover-border-color: var(--tone-primary-hover);
+        --bs-btn-active-bg: var(--tone-primary-hover);
+        --bs-btn-active-border-color: var(--tone-primary-hover);
+        --bs-btn-disabled-bg: #8fb8d4;
+        --bs-btn-disabled-border-color: #8fb8d4;
+      }
+
+      .btn-outline-primary {
+        --bs-btn-color: var(--tone-primary);
+        --bs-btn-border-color: var(--tone-primary);
+        --bs-btn-hover-bg: var(--tone-primary);
+        --bs-btn-hover-border-color: var(--tone-primary);
+        --bs-btn-hover-color: #fff;
+        --bs-btn-active-bg: var(--tone-primary);
+        --bs-btn-active-border-color: var(--tone-primary);
+        --bs-btn-active-color: #fff;
+      }
+
+      .btn-outline-secondary {
+        --bs-btn-color: var(--tone-muted);
+        --bs-btn-border-color: var(--tone-border);
+        --bs-btn-hover-bg: var(--tone-primary-soft);
+        --bs-btn-hover-border-color: var(--tone-border);
+        --bs-btn-hover-color: var(--tone-text);
+      }
+
+      .text-secondary {
+        color: var(--tone-muted) !important;
+      }
+
+      .form-label {
+        color: var(--tone-text);
+      }
+    </style>
+  </head>
+
+  <body>
+    <nav class="navbar navbar-light eval-nav mb-4">
+      <div
+        class="container d-flex align-items-center justify-content-between py-2"
+      >
+        <div class="d-flex align-items-center gap-3">
+          <span
+            class="d-inline-flex align-items-center justify-content-center rounded-circle border"
+            style="
+              width: 36px;
+              height: 36px;
+              background: var(--tone-primary-soft);
+              border-color: rgba(0, 94, 162, 0.25) !important;
+            "
+          >
+            <span
+              class="fw-bold"
+              style="font-size: 0.9rem; color: var(--tone-primary)"
+              >FR</span
+            >
+          </span>
+          <div>
+            <div class="hero-title">人脸检测 Demo</div>
+            <div class="small text-secondary">浏览器端 face-api.js · 图片检测</div>
+          </div>
+        </div>
+        <span class="hero-chip d-none d-md-inline-flex">纯前端 · 图片检测</span>
+      </div>
+    </nav>
+
+    <main class="container pb-5">
+      <section class="mb-3">
+        <div class="d-flex flex-wrap align-items-end justify-content-between gap-2">
+          <div>
+            <h2 class="hero-title mb-1">人脸检测</h2>
+            <p class="hero-subtitle mb-0">本地运行，不上传图片/视频。</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="row g-4">
+        <!-- 左侧：模式 &amp; 控制 -->
+        <div class="col-lg-4">
+          <div class="card p-3 p-md-4 h-100 d-flex flex-column">
+            <h5 class="card-title mb-3">选择模式 &amp; 输入</h5>
+
+            <ul class="nav nav-pills mb-3" id="mode-tabs" role="tablist">
+              <li class="nav-item me-2" role="presentation">
+                <button
+                  class="nav-link active"
+                  id="tab-image"
+                  data-bs-toggle="pill"
+                  data-bs-target="#pane-image"
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                >
+                  图片检测
+                </button>
+              </li>
+            </ul>
+
+            <div class="tab-content flex-grow-1">
+              <!-- 图片模式 -->
+              <div
+                class="tab-pane fade show active"
+                id="pane-image"
+                role="tabpanel"
+                aria-labelledby="tab-image"
+              >
+                <div class="mb-3">
+                  <label for="image-input" class="form-label">选择图片文件</label>
+                  <input
+                    class="form-control"
+                    type="file"
+                    id="image-input"
+                    accept="image/*"
+                  />
+                </div>
+
+                <button
+                  id="detect-btn"
+                  type="button"
+                  class="btn btn-primary w-100 mb-2"
+                  disabled
+                >
+                  正在加载模型...
+                </button>
+              </div>
+
+            </div>
+
+            <hr class="border-secondary border-opacity-25 my-3" />
+
+            <div class="d-flex align-items-center justify-content-between">
+              <span id="status-text" class="small text-secondary">
+                正在加载模型，请稍候...
+              </span>
+              <span id="status-pill" class="status-pill">初始化中</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧：预览 &amp; 结果 -->
+        <div class="col-lg-8">
+          <div class="card p-3 p-md-4 h-100 d-flex flex-column">
+            <h5 class="card-title mb-3">预览 &amp; 检测结果</h5>
+
+            <div class="mb-3">
+              <!-- 图片预览容器 -->
+              <div id="preview-container" class="mb-3">
+                <img id="preview-image" alt="预览图片" />
+                <canvas id="overlay-canvas" width="0" height="0"></canvas>
+                <div id="preview-placeholder">请选择图片开始预览</div>
+              </div>
+
+            </div>
+
+            <!-- 统计 &amp; 详情 -->
+            <div class="d-flex flex-wrap align-items-center justify-content-between mb-2">
+              <div>
+                <div class="small text-secondary">检测统计</div>
+                <div class="fw-semibold">
+                  当前模式：<span id="current-mode-label">图片检测</span>，
+                  检测到 <span id="face-count">0</span> 张人脸
+                </div>
+              </div>
+            </div>
+
+            <div
+              id="face-detail-list"
+              class="mt-2"
+              style="max-height: 220px; overflow-y: auto"
+            >
+              <div class="text-secondary small">
+                暂无检测结果。上传一张图片或开启摄像头开始检测。
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Bootstrap JS（用于 Tab 切换） -->
+    <script src="https://unpkg.com/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
+
